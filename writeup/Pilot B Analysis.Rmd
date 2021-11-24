@@ -1,0 +1,125 @@
+---
+title: "Pilot B Analysis"
+author: "Seyeon Kim"
+date: "11/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The qualtRics package is huge timesaver and really easy once you get it set up. Ordinarily, you would have to open Qualtrics and download the csv file from each survey manually, but this package lets you pull the data directly from R.
+
+
+Once they approve your request, you should be able to go to your Account Settings --> Qualtrics IDs --> hit "Generate Token" under the API box. Copy the token because you will use it below, when you authenticate your credentials.
+
+But first, in your RMarkdown file, you'll want to install and load the qualtRics package:
+
+# load libraries
+```{r}
+#install.packages("qualtRics") # comment this out once you've installed
+library(qualtRics)
+library(tidyverse)
+library(ggplot2)
+```
+
+In the code chunk below, you will authenticate your API credentials. Where it says "ENTER TOKEN HERE", enter the token you copied from the API box in your Qualtrics account page. (Install = T ensures that you only have to do this once.)
+
+# authenticate api 
+```{r}
+qualtrics_api_credentials(api_key = "IPgHt7CTgQBD5OgvjJHv48PlYnFJk8OYvNq8miJp", base_url = "stanforduniversity.ca1.qualtrics.com", install = T, overwrite = TRUE)
+
+# readRenviron("~/.Renviron")
+```
+Make sure to remove your api_key above before you share this Rmd with others or push to Github.
+
+You are all set up! Now you can actually download the data for any of your surveys. To find your survey ID, go to your survey and look at the link. The string that starts with a "SV_ ..." between the two slashes is your survey ID, which you should enter in the field that says "SURVEY ID HERE". (force_request = T tells the fetch_survey function to fetch the survey again even if you've fetched the survey in the past - especially useful if you're frequently downloading the most recent data for things like prompt participant payment.)
+
+# load survey
+```{r}
+qualtricsData <- fetch_survey(surveyID = "SV_6sRpi4Fvh05zJPg", force_request = T)
+```
+
+Finally, you may want to save this data in a data folder:
+
+# save data
+```{r}
+write_csv(qualtricsData, "./qualtricsData.csv")
+```
+
+# preliminary analysis
+
+First, I clean the data -- excluding cases that did not have necessary responses on key variable
+
+```{r}
+d <- qualtricsData %>% 
+  drop_na(`recommend-scale`)
+```
+
+
+I then recode the recommendation scale to a numerical scale. 
+
+```{r}
+d$'recommend.scale' <- recode(d$`recommend-scale`, 'Definitely\nwill not recommend'= 1,'Not very probably recommend' = 2, 'Probably not recommend' = 3, 'Might or\nmight not recommend' = 4, 'Probably recommend' = 5, 'Very probably recommend' =6, 'Definitely will recommend' = 7)
+```
+
+I then create a variable for the ex-employee resume condition and the ex-founder resume condition, because the survey is a 2 x 2 study.
+
+```{r}
+d = d %>%
+  select('recommend.scale', starts_with('resumes_randomization'), 'attention-binary-qs') %>%
+  mutate(employee_condition = ifelse(is.na(d$'resumes_randomization_DO_male-employee')== FALSE | 
+                                       is.na(d$'resumes_randomization_DO_female-employee')==FALSE, 
+                                     'employee', 'founder')) %>% 
+  mutate(gender = ifelse((d$'resumes_randomization_DO_female-employee'==1) | (d$'resumes_randomization_DO_female-founder'==1), 'female', 'male')) %>%
+  mutate(gender = ifelse(is.na(gender), 'male', 'female'))
+
+
+#d = d %>%
+#  select('recommend.scale', starts_with('resumes_randomization')) %>%
+#  mutate(employee_condition = ifelse(('resumes_randomization_DO_male-employee'==1) | ('resumes_randomization_DO_female-employee'==1), 'employee', 'founder')) %>%
+#  mutate(employee_condition = ifelse(is.na(employee_condition), 'founder', employee_condition)) %>%
+#  mutate(gender = ifelse(('resumes_randomization_DO_female-employee'==1) | ('resumes_randomization_DO_female-founder'==1), 'female', 'male')) %>%
+#  mutate(gender = ifelse(is.na(gender), 'male', 'female'))
+
+#d$employee_condition <- ifelse((d$'resumes_randomization_DO_male-employee'==1 | d$'resumes_randomization_DO_female-employee' ==1), '1', '0')
+#d$'employee_condition'[is.na(d$'employee_condition')] <- 0
+#d$entp_condition <- ifelse((d$'resumes_randomization_DO_male-founder'==1 | d$'resumes_randomization_DO_female-founder' ==1), '1', '0')
+```
+
+I exclude cases that do not pass the attention check. 
+
+```{r}
+
+d$attention.check <- recode(d$`attention-binary-qs`, 'Yes, an ex-founder'= "founder",'No, not an ex-founder' = 'employee')
+
+d = d %>% 
+  filter(attention.check == employee_condition)
+```
+
+Let's plot this out!
+```{r}
+ggplot(d, aes(x = recommend.scale, fill=gender)) +
+  geom_bar(position = position_dodge(width = 1)) +
+  facet_grid(~employee_condition)
+```
+```{r}
+d %>%
+  group_by(employee_condition, gender) %>%
+  summarize(meanscore = mean(recommend.scale),
+            sdscore = sd(recommend.scale)) %>%
+  ggplot(mapping=aes(x=employee_condition, y=meanscore, #ymin=meanscore-sd, ymax=meanscore+sd,
+                     fill=gender)) +
+  geom_bar(stat='identity', position = position_dodge(width = 1)) #+
+  #geom_errorbar()
+```
+
+```{r}
+t.test(d$recommend.scale[d$employee_condition=='founder'], 
+       d$recommend.scale[d$employee_condition=='employee'])
+
+#t.test(c(1,2,3), c(1,2))
+#t.test(c(1,2), c(1))
+```
+
