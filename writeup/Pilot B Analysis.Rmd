@@ -1,7 +1,7 @@
 ---
 title: "Pilot B Analysis"
 author: "Seyeon Kim"
-date: "11/11/2021"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: html_document
 ---
 
@@ -121,5 +121,6 @@ t.test(d$recommend.scale[d$employee_condition=='founder'],
 
 #t.test(c(1,2,3), c(1,2))
 #t.test(c(1,2), c(1))
+
 ```
 

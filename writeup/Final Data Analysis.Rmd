@@ -1,0 +1,123 @@
+---
+title: "Replication of Study 2 by Kacperczyk & Younkin (2021, Organization Science)"
+author: "Seyeon Kim (seyeonk@stanford.edu)"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+---
+
+<!-- Replication reports should all use this template to standardize reporting across projects.  These reports will be public supplementary materials that accompany the summary report(s) of the aggregate results. -->
+
+
+## Introduction
+
+
+|    I am interested in studying the career processes of entrepreneurs, especially those who move in and out of traditional, hierarchical firms. Kacperczyk and Younkin (2021) found that having an entrepreneurial experience negatively influences workers’ prospects at the hiring stage and shows how this founding penalty varies by gender. Study 1 is a resume-based audit study that tested the effect of entrepreneurial experience on the probability of interview callbacks, and Study 2 is an experimental survey that attempted to evaluate the explanations about why there exists a penalty for ex-founders returning to wage employment. I replicate the findings from Study 2, because it is not only appropriate in scope and time but also engages with the literature on understanding why founding penalties exist.
+
+|    Participants are given one of four resumes differing in founding experience and gender and asked to evaluate the given job candidate’s qualities, especially their fit and commitment. In other words, this survey experiment is a two-by-two between-subject design with participants randomly assigned to read one type of resume out of four conditions: female founder, male founder, female non-founder/employee, and male employee. The dependent variable is the respondents’ willingness to recommend the given job candidate to a future employer, and mediating variables are the extent to which the given job candidate is a good fit to a hierarchical organization and is likely to quit next job. At the end of the experiment, to control for the respondents’ characteristics, their information including age, gender, and years of work experience will be collected.
+
+|     The primary challenge will be to find a sample as similar as possible to the original study: marketing managers with more than five years of work experience and at least a bachelor’s degree who come from a diverse range of industries, including manufacturing, advertising, healthcare, software development, and consulting. Because the paper does not mention the industry composition of the sample and only writes that the sample is from “across a range of industries, such as manufacturing, advertising, healthcare, software development, and consulting”, I am worried about getting a sample whose industry composition vastly differs from that of the original study sample. Another challenge will be difficulties associated with retaining attention, which would especially increase from my additional questions. The more questions and tasks respondents are asked to do, the more likely that the responses we get are answered less carefully.
+
+|     The link to the repository is as follows: https://github.com/psych251/Kacperczyk2021.git
+
+
+## Methods
+
+
+### Power Analysis
+
+The original effect size is around 0.286, which is the cohen's d and which was computed using the t statistic of 2.05 and p = 0.04 found in the original study. It is also important to note that we estimated the degrees of freedom to be 205, given that the total sample size was 413 and thus divided 413 by 2 and then subtracted by 1. The estimated sample sizes at 80%, 90%, and 95% power are 386, 516, and 636 individuals respectively. 
+
+
+### Planned Sample
+
+The planned sample of the present replication study is 386 individuals who have hiring experience. If the budget allows for further selection of the sample, it would be helpful to further restrict the sample to those who have at least 2 years of work experience. 
+
+### Materials and Procedure
+
+Here is the link for the materials: https://stanforduniversity.qualtrics.com/jfe/form/SV_6sRpi4Fvh05zJPg. 
+
+The resumes of job candidates differing in founding experience and gender used in the present study are downloaded from the original study. The procedure is also exactly the same except one additional questionnaire I ask in the replication study about the respondents' current job position and industry, because the original study sample consists entirely of hiring managers who have extensive experience hiring for marketing positions. 
+
+
+### Analysis Plan
+
+|     "We begin by analyzing differences in means between our treatment and control conditions. Consistent with the audit results, participants gave a significantly stronger (t = 2.05, p = 0.04) interview recommendation to nonfounders (mean = 5.73) than to ex-founders (mean = 5.40), and female ex-founders received a significantly higher recommendation (t = 4.33, p = 0.01, mean = 5.89) than male ex-founders (mean = 4.86)."
+
+
+|     **The key analysis of interest is the unpaired, two-tailed t-test comparing the experimental and control groups.** Moreover it is worth noting that because of the differences from the original study in sample, we aim to ask additional questions about their current employment status, for whom they work for, which allows us to learn about what sector/industry they work in, and what industry their ventures are in if they are self-employed.
+
+First, I clean the data -- excluding cases that did not have necessary responses on key variable
+
+```{r}
+library(qualtRics)
+library(tidyverse)
+library(ggplot2)
+
+qualtricsData <- read_csv("./qualtricsData.csv")
+
+d <- qualtricsData %>% 
+  drop_na(`recommend-scale`)
+```
+
+
+I then recode the recommendation scale to a numerical scale. 
+
+```{r}
+d$'recommend.scale' <- recode(d$`recommend-scale`, 'Definitely\nwill not recommend'= 1,'Not very probably recommend' = 2, 'Probably not recommend' = 3, 'Might or\nmight not recommend' = 4, 'Probably recommend' = 5, 'Very probably recommend' =6, 'Definitely will recommend' = 7)
+```
+
+I then create a variable for the ex-employee resume condition and the ex-founder resume condition, because the survey is a 2 x 2 study.
+
+```{r}
+d = d %>%
+  select('recommend.scale', starts_with('resumes_randomization'), 'attention-binary-qs') %>%
+  mutate(employee_condition = ifelse(is.na(d$'resumes_randomization_DO_male-employee')== FALSE | 
+                                       is.na(d$'resumes_randomization_DO_female-employee')==FALSE, 
+                                     'employee', 'founder')) %>% 
+  mutate(gender = ifelse((d$'resumes_randomization_DO_female-employee'==1) | (d$'resumes_randomization_DO_female-founder'==1), 'female', 'male')) %>%
+  mutate(gender = ifelse(is.na(gender), 'male', 'female'))
+
+```
+
+I exclude cases that do not pass the attention check.
+
+```{r}
+
+d$attention.check <- recode(d$`attention-binary-qs`, 'Yes, an ex-founder'= "founder",'No, not an ex-founder' = 'employee')
+
+d = d %>% 
+  filter(attention.check == employee_condition)
+```
+
+Let's plot this out!
+```{r}
+ggplot(d, aes(x = recommend.scale, fill=gender)) +
+  geom_bar(position = position_dodge(width = 1)) +
+  facet_grid(~employee_condition)
+```
+This is another way we could plot the data. 
+```{r}
+d %>%
+  group_by(employee_condition, gender) %>%
+  summarize(meanscore = mean(recommend.scale),
+            sdscore = sd(recommend.scale)) %>%
+  ggplot(mapping=aes(x=employee_condition, y=meanscore, #ymin=meanscore-sd, ymax=meanscore+sd,
+                     fill=gender)) +
+  geom_bar(stat='identity', position = position_dodge(width = 1))
+```
+### Differences from Original Study
+
+|     I expect there to be some differences in sample. First, the present replication study does not recruit hiring managers but rather those who have any experience in making hiring decisions. Moreover, the original study recruits those who have experience hiring for marketing positions, but the sample collected in the previous study is expected differ in their job positions. Because perceptions of ex-entrepreneurs, which is the focus of Study 2, might differ across job positions and industries, I do anticipate that these differences in sample might create a difference based on claims in the original article. Though this might be seen as 'failing' to replicate, new insights can be yielded from this exercise such that job positions and industries are significant drivers of the results. Otherwise, the setting, procedure, and analysis plan are strictly followed from the original study. 
+
+### Methods Addendum (Post Data Collection)
+
+#### Actual Sample
+
+|     In addition to only including participants with hiring experience, the present study excludes samples who do not pass the attention check questionnaire. The attention check questionnaire makes sure that the participants properly read the resumes by asking them whether the given job candidate was an ex-founder. Failing to correctly answer this attention check questionnaire leads one to be excluded from the sample. 
+
+
